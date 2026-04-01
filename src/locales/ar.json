@@ -1,0 +1,57 @@
+{
+  "translation": {
+    "dashboard": {
+      "title": "لوحة القيادة",
+      "subtitle": "نظرة عامة على مقاييس عملك"
+    },
+    "invoices": {
+      "title": "الفواتير",
+      "subtitle": "إدارة فواتيرك",
+      "new_invoice": "فاتورة جديدة",
+      "invoice_number": "رقم الفاتورة",
+      "client": "العميل",
+      "amount": "المبلغ",
+      "status": "الحالة",
+      "date": "التاريخ"
+    },
+    "inventory": {
+      "title": "المخزون",
+      "subtitle": "إدارة المنتجات ومستويات المخزون",
+      "add_product": "إضافة منتج",
+      "total_products": "إجمالي المنتجات",
+      "in_stock": "متوفر",
+      "low_stock": "مخزون منخفض",
+      "out_of_stock": "نفدت الكمية"
+    },
+    "clients": {
+      "title": "العملاء",
+      "subtitle": "إدارة عملائك",
+      "add_client": "إضافة عميل"
+    },
+    "suppliers": {
+      "title": "الموردين",
+      "subtitle": "إدارة مورديك",
+      "add_supplier": "إضافة مورد"
+    },
+    "reports": {
+      "title": "التقارير",
+      "subtitle": "عرض تحليلاتك وأدائك"
+    },
+    "settings": {
+      "title": "الإعدادات",
+      "subtitle": "إدارة تفضيلات التطبيق"
+    },
+    "common": {
+      "search": "بحث",
+      "add": "إضافة",
+      "edit": "تعديل",
+      "delete": "حذف",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "actions": "إجراءات",
+      "language": "اللغة",
+      "english": "English",
+      "arabic": "العربية"
+    }
+  }
+}

@@ -1,262 +1,303 @@
-import { useState, useEffect } from 'react';
-import { Card, CardHeader } from '../ui/Card';
+import { useState } from 'react';
+import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Building2, User, Bell, Lock } from 'lucide-react';
+import { Building2, User, Bell, Lock, Save, Globe, Smartphone, UserCircle, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import type { Database } from '../../types/database.types';
 
 export function Settings() {
-  const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('company');
-  const [company, setCompany] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, profile, organization, role, refreshAuth } = useAuth();
+  const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState('organization');
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    if (profile?.company_id) {
-      loadCompany();
-    } else {
-      setLoading(false);
-    }
-  }, [profile]);
+  const [orgData, setOrgData] = useState({
+    name: organization?.name || '',
+    email: organization?.email || '',
+    phone: organization?.phone || '',
+    address: organization?.address || '',
+    currency: organization?.currency || 'USD',
+    tax_rate: organization?.tax_rate || 0,
+    slug: organization?.slug || '',
+  });
 
-  const loadCompany = async () => {
-    if (!profile?.company_id) return;
+  const [profileData, setProfileData] = useState({
+    full_name: profile?.full_name || '',
+  });
 
+  const handleSaveOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!organization?.id) return;
+    
+    setSaving(true);
     try {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', profile.company_id)
-        .maybeSingle();
+      const { error } = await supabase
+        .from('organizations')
+        .update({
+          name: orgData.name,
+          email: orgData.email,
+          phone: orgData.phone,
+          address: orgData.address,
+          currency: orgData.currency,
+          tax_rate: Number(orgData.tax_rate),
+        })
+        .eq('id', organization.id);
 
       if (error) throw error;
-      if (data) {
-        setCompany(data);
-      } else {
-        const { data: newCompany, error: createError } = await supabase
-          .from('companies')
-          .insert({
-            name: 'My Company',
-            currency: 'USD',
-            tax_rate: 0,
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-
-        if (newCompany) {
-          await supabase
-            .from('users')
-            .update({ company_id: newCompany.id })
-            .eq('id', profile.id);
-
-          setCompany(newCompany);
-        }
-      }
+      showToast('Organization settings saved successfully');
+      refreshAuth();
     } catch (error) {
-      console.error('Error loading company:', error);
+      console.error('Error saving organization:', error);
+      showToast('Failed to save organization settings', 'error');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleSaveCompany = async (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setMessage('');
+    if (!user?.id) return;
 
+    setSaving(true);
     try {
       const { error } = await supabase
-        .from('companies')
+        .from('users')
         .update({
-          name: company.name,
-          email: company.email,
-          phone: company.phone,
-          address: company.address,
-          currency: company.currency,
-          tax_rate: parseFloat(company.tax_rate),
+          full_name: profileData.full_name,
         })
-        .eq('id', company.id);
+        .eq('id', user.id);
 
       if (error) throw error;
-      setMessage('Company settings saved successfully');
+      showToast('Profile updated successfully');
+      refreshAuth();
     } catch (error) {
-      console.error('Error saving company:', error);
-      setMessage('Error saving settings');
+      console.error('Error saving profile:', error);
+      showToast('Failed to update profile', 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const tabs = [
-    { id: 'company', label: 'Company Profile', icon: Building2 },
+    { id: 'organization', label: 'Organization', icon: Building2 },
+    { id: 'taxes', label: 'Tax Rates', icon: ShieldCheck },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Lock },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Manage your account and preferences</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+          <p className="text-muted-foreground mt-1">Manage your account and organization preferences</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <Card padding={false}>
-            <nav className="space-y-1 p-2">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-blue-50 text-blue-600 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-1 space-y-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                  activeTab === tab.id
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-medium scale-[1.02]'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="lg:col-span-3">
-          {activeTab === 'company' && company && (
+        <div className="lg:col-span-3 space-y-6">
+          {activeTab === 'organization' && (
             <Card>
-              <CardHeader title="Company Profile" subtitle="Manage your company information" />
-              <form onSubmit={handleSaveCompany} className="space-y-4">
-                <Input
-                  label="Company Name"
-                  value={company.name}
-                  onChange={(e) => setCompany({ ...company, name: e.target.value })}
-                  required
-                />
-
-                <Input
-                  label="Email"
-                  type="email"
-                  value={company.email || ''}
-                  onChange={(e) => setCompany({ ...company, email: e.target.value })}
-                />
-
-                <Input
-                  label="Phone"
-                  type="tel"
-                  value={company.phone || ''}
-                  onChange={(e) => setCompany({ ...company, phone: e.target.value })}
-                />
-
-                <Input
-                  label="Address"
-                  value={company.address || ''}
-                  onChange={(e) => setCompany({ ...company, address: e.target.value })}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <Globe className="w-6 h-6 text-primary" />
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Currency</label>
-                    <select
-                      value={company.currency}
-                      onChange={(e) => setCompany({ ...company, currency: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="USD">USD - US Dollar</option>
-                      <option value="EUR">EUR - Euro</option>
-                      <option value="GBP">GBP - British Pound</option>
-                      <option value="JPY">JPY - Japanese Yen</option>
-                    </select>
+                    <h3 className="text-xl font-bold text-foreground">Organization Profile</h3>
+                    <p className="text-sm text-muted-foreground">This information will be displayed on your invoices</p>
+                  </div>
+                  {role === 'owner' && (
+                    <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-600 rounded-full text-xs font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Owner Access
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveOrganization} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input
+                      label="Organization Name"
+                      value={orgData.name}
+                      onChange={(e) => setOrgData({ ...orgData, name: e.target.value })}
+                      required
+                      placeholder="e.g. Acme Corp"
+                    />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-foreground">Organization URL (Slug)</label>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
+                        <span>bntec.app/</span>
+                        <span className="font-medium text-foreground">{orgData.slug}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input
+                      label="Business Email"
+                      type="email"
+                      value={orgData.email}
+                      onChange={(e) => setOrgData({ ...orgData, email: e.target.value })}
+                      placeholder="billing@company.com"
+                    />
+                    <Input
+                      label="Phone"
+                      type="tel"
+                      value={orgData.phone}
+                      onChange={(e) => setOrgData({ ...orgData, phone: e.target.value })}
+                      placeholder="+1 (555) 000-0000"
+                    />
                   </div>
 
                   <Input
-                    label="Tax Rate (%)"
-                    type="number"
-                    step="0.01"
-                    value={company.tax_rate}
-                    onChange={(e) => setCompany({ ...company, tax_rate: e.target.value })}
+                    label="Business Address"
+                    value={orgData.address}
+                    onChange={(e) => setOrgData({ ...orgData, address: e.target.value })}
+                    placeholder="123 Business St, Suite 100, Capital City"
                   />
-                </div>
 
-                {message && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    message.includes('Error')
-                      ? 'bg-red-50 text-red-700 border border-red-200'
-                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}>
-                    {message}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-foreground">Default Currency</label>
+                      <select
+                        value={orgData.currency}
+                        onChange={(e) => setOrgData({ ...orgData, currency: e.target.value })}
+                        className="w-full px-3 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                      >
+                        <option value="USD">USD - US Dollar ($)</option>
+                        <option value="EUR">EUR - Euro (€)</option>
+                        <option value="GBP">GBP - British Pound (£)</option>
+                        <option value="MAD">MAD - Moroccan Dirham (DH)</option>
+                      </select>
+                    </div>
+
+                    <Input
+                      label="Default Tax Rate (%)"
+                      type="number"
+                      step="0.01"
+                      value={orgData.tax_rate}
+                      onChange={(e) => setOrgData({ ...orgData, tax_rate: Number(e.target.value) })}
+                    />
                   </div>
-                )}
 
-                <div className="flex justify-end pt-4">
-                  <Button type="submit" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
-              </form>
+                  <div className="flex justify-end pt-6 border-t border-border">
+                    <Button type="submit" disabled={saving || role !== 'owner'} className="px-8">
+                      <Save className="w-4 h-4 mr-2" />
+                      {saving ? 'Saving...' : 'Save Settings'}
+                    </Button>
+                  </div>
+                </form>
+              </div>
             </Card>
+          )}
+
+          {activeTab === 'taxes' && (
+            <TaxesManager />
           )}
 
           {activeTab === 'profile' && (
             <Card>
-              <CardHeader title="My Profile" subtitle="Update your personal information" />
-              <div className="space-y-4">
-                <Input label="Full Name" value={profile?.full_name || ''} disabled />
-                <Input label="Email" type="email" value={profile?.email || ''} disabled />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
-                  <input
-                    type="text"
-                    value={profile?.role || ''}
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 capitalize"
-                  />
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <UserCircle className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">Personal Profile</h3>
+                    <p className="text-sm text-muted-foreground">Manage your personal information and credentials</p>
+                  </div>
                 </div>
+
+                <form onSubmit={handleSaveProfile} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input 
+                      label="Full Name" 
+                      value={profileData.full_name} 
+                      onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                      placeholder="Your name"
+                    />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-foreground">Email Address</label>
+                      <div className="px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
+                        {user?.email}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Organization Role</label>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg border border-border text-foreground capitalize w-fit">
+                      <ShieldCheck className="w-4 h-4 text-primary" />
+                      {role || 'member'}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-6 border-t border-border">
+                    <Button type="submit" disabled={saving} className="px-8">
+                      <Save className="w-4 h-4 mr-2" />
+                      {saving ? 'Updating...' : 'Update Profile'}
+                    </Button>
+                  </div>
+                </form>
               </div>
             </Card>
           )}
 
           {activeTab === 'notifications' && (
             <Card>
-              <CardHeader title="Notification Preferences" subtitle="Manage how you receive notifications" />
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                  <div>
-                    <p className="font-medium text-gray-900">Email Notifications</p>
-                    <p className="text-sm text-gray-600">Receive email updates about your invoices</p>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <Smartphone className="w-6 h-6 text-primary" />
                   </div>
-                  <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" defaultChecked />
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">Notifications</h3>
+                    <p className="text-sm text-muted-foreground">Stay updated on your business activity</p>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                  <div>
-                    <p className="font-medium text-gray-900">Low Stock Alerts</p>
-                    <p className="text-sm text-gray-600">Get notified when products are running low</p>
-                  </div>
-                  <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" defaultChecked />
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-medium text-gray-900">Payment Reminders</p>
-                    <p className="text-sm text-gray-600">Send reminders for overdue invoices</p>
-                  </div>
-                  <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" defaultChecked />
+
+                <div className="space-y-2">
+                  {[
+                    { id: 'inv', title: 'Invoice Updates', desc: 'Get notified when an invoice is paid or becomes overdue' },
+                    { id: 'stock', title: 'Low Stock Alerts', desc: 'Get notified when products reach their low stock threshold' },
+                    { id: 'pay', title: 'Payment Reminders', desc: 'Automatic reminders for clients with pending payments' },
+                  ].map((item, idx) => (
+                    <div key={item.id} className={`flex items-center justify-between py-6 ${idx !== 2 ? 'border-b border-border' : ''}`}>
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground text-lg">{item.title}</p>
+                        <p className="text-sm text-muted-foreground max-w-md">{item.desc}</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" defaultChecked className="sr-only peer" />
+                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+                  ))}
                 </div>
               </div>
             </Card>
@@ -264,13 +305,31 @@ export function Settings() {
 
           {activeTab === 'security' && (
             <Card>
-              <CardHeader title="Security Settings" subtitle="Manage your password and security" />
-              <div className="space-y-4">
-                <Input label="Current Password" type="password" />
-                <Input label="New Password" type="password" />
-                <Input label="Confirm New Password" type="password" />
-                <div className="flex justify-end pt-4">
-                  <Button>Update Password</Button>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <Lock className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">Security Settings</h3>
+                    <p className="text-sm text-muted-foreground">Protect your account with a strong password</p>
+                  </div>
+                </div>
+
+                <div className="max-w-md space-y-6">
+                  <div className="p-4 bg-amber-500/10 border border-amber-200 rounded-xl flex items-start gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <p className="text-sm text-amber-800">
+                      Changing your password will log you out from all other devices.
+                    </p>
+                  </div>
+                  <Input label="New Password" type="password" placeholder="Min 6 characters" />
+                  <Input label="Confirm New Password" type="password" />
+                  <div className="flex justify-end">
+                    <Button onClick={() => showToast('Password reset email sent!', 'success')}>
+                      Update Password
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -278,5 +337,81 @@ export function Settings() {
         </div>
       </div>
     </div>
+  );
+}
+
+function TaxesManager() {
+  const { organization } = useAuth();
+  const { showToast } = useToast();
+  const [taxes, setTaxes] = useState<Database['public']['Tables']['taxes']['Row'][]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadTaxes = async () => {
+    if (!organization?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('taxes')
+        .select('*')
+        .eq('organization_id', organization.id);
+      if (error) throw error;
+      setTaxes(data || []);
+    } catch (error) {
+      console.error('Error loading taxes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useState(() => {
+    loadTaxes();
+  });
+
+  const handleDeleteTax = async (id: string) => {
+    try {
+      const { error } = await supabase.from('taxes').delete().eq('id', id);
+      if (error) throw error;
+      showToast('Tax rate deleted');
+      loadTaxes();
+    } catch (error) {
+       console.error('Error deleting tax:', error);
+       showToast('Failed to delete tax', 'error');
+    }
+  };
+
+  return (
+    <Card>
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-8 pb-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <ShieldCheck className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground">Tax Configurations</h3>
+              <p className="text-sm text-muted-foreground">Manage regional tax rates for your invoices</p>
+            </div>
+          </div>
+          <Button size="sm" onClick={() => showToast('New tax rate window coming soon!')}>Add Tax Rate</Button>
+        </div>
+
+        <div className="space-y-4">
+          {loading ? (
+            <p>Loading tax rates...</p>
+          ) : taxes.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No custom tax rates set. Using global default.</p>
+          ) : (
+            taxes.map((tax) => (
+              <div key={tax.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border">
+                <div>
+                  <p className="font-bold">{tax.name}</p>
+                  <p className="text-sm text-muted-foreground">{tax.rate}% {tax.is_default && '(Default)'}</p>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => handleDeleteTax(tax.id)}>Delete</Button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

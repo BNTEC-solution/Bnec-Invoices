@@ -104,7 +104,7 @@ The project is continuously improving and may undergo structural changes.
 
 For business inquiries or collaboration:
 
-* Email: [contact@bentec.com](mailto:your@email.com)
+* Email: [contact@bntec.com](mailto:contact@bntec.com)
 * Website: Coming soon
 
 ---

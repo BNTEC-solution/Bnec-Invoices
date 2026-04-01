@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
@@ -9,11 +9,14 @@ import { Clients } from './components/pages/Clients';
 import { Suppliers } from './components/pages/Suppliers';
 import { Reports } from './components/pages/Reports';
 import { Settings } from './components/pages/Settings';
+import { LandingPage } from './components/pages/LandingPage';
+import { Privacy, Terms } from './components/pages/StaticPages';
+import { SuperAdminDashboard } from './components/pages/admin/SuperAdminDashboard';
 
-function App() {
+// Protected Route Wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState('dashboard');
-
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -21,36 +24,44 @@ function App() {
       </div>
     );
   }
-
+  
   if (!user) {
-    return <LoginPage />;
+    return <Navigate to="/login" replace />;
   }
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'invoices':
-        return <Invoices />;
-      case 'inventory':
-        return <Inventory />;
-      case 'clients':
-        return <Clients />;
-      case 'suppliers':
-        return <Suppliers />;
-      case 'reports':
-        return <Reports />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return <Dashboard />;
-    }
-  };
+  return <>{children}</>;
+}
+
+function App() {
+  const { isAdmin, isSuperAdmin } = useAuth();
 
   return (
-    <DashboardLayout currentPage={currentPage} onNavigate={setCurrentPage}>
-      {renderPage()}
-    </DashboardLayout>
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
+      
+      {/* Protected App Routes */}
+      <Route path="/app" element={
+        <ProtectedRoute>
+          <DashboardLayout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<Dashboard />} />
+        <Route path="invoices" element={<Invoices />} />
+        <Route path="inventory" element={<Inventory />} />
+        <Route path="clients" element={<Clients />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={isAdmin ? <Settings /> : <Navigate to="/app" />} />
+        <Route path="admin" element={isSuperAdmin ? <SuperAdminDashboard /> : <Navigate to="/app" />} />
+        <Route path="*" element={<Navigate to="/app" />} />
+      </Route>
+      
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
   );
 }
 

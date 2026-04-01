@@ -1,0 +1,57 @@
+{
+  "translation": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overview of your business metrics"
+    },
+    "invoices": {
+      "title": "Invoices",
+      "subtitle": "Manage your invoices",
+      "new_invoice": "New Invoice",
+      "invoice_number": "Invoice #",
+      "client": "Client",
+      "amount": "Amount",
+      "status": "Status",
+      "date": "Date"
+    },
+    "inventory": {
+      "title": "Inventory",
+      "subtitle": "Manage your products and stock levels",
+      "add_product": "Add Product",
+      "total_products": "Total Products",
+      "in_stock": "In Stock",
+      "low_stock": "Low Stock",
+      "out_of_stock": "Out of Stock"
+    },
+    "clients": {
+      "title": "Clients",
+      "subtitle": "Manage your clients",
+      "add_client": "Add Client"
+    },
+    "suppliers": {
+      "title": "Suppliers",
+      "subtitle": "Manage your suppliers",
+      "add_supplier": "Add Supplier"
+    },
+    "reports": {
+      "title": "Reports",
+      "subtitle": "View your analytics and performance"
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Manage your application preferences"
+    },
+    "common": {
+      "search": "Search",
+      "add": "Add",
+      "edit": "Edit",
+      "delete": "Delete",
+      "save": "Save",
+      "cancel": "Cancel",
+      "actions": "Actions",
+      "language": "Language",
+      "english": "English",
+      "arabic": "العربية"
+    }
+  }
+}
