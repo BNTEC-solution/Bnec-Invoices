@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/Table';
-import { Plus, Search, Filter, Download, CreditCard as Edit, Trash2, Mail, X, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, Download, Edit2, Trash2, Mail, X, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -15,7 +15,7 @@ import type { Database } from '../../types/database.types';
 import { useTranslation } from 'react-i18next';
 
 type Invoice = Database['public']['Tables']['invoices']['Row'] & {
-  items: Database['public']['Tables']['invoice_items']['Row'][];
+  items?: Database['public']['Tables']['invoice_items']['Row'][];
   client?: Database['public']['Tables']['clients']['Row'];
 };
 
@@ -51,30 +51,65 @@ export function Invoices() {
     if (!organization) return;
     try {
       setLoading(true);
-      const [invoicesRes, clientsRes, productsRes] = await Promise.all([
-        supabase
-          .from('invoices')
-          .select(`
-            *,
-            items:invoice_items(*),
-            client:clients(*)
-          `)
-          .eq('organization_id', organization.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('clients')
-          .select('*')
-          .eq('organization_id', organization.id),
-        supabase
-          .from('products')
-          .select('*')
-          .eq('organization_id', organization.id)
-      ]);
+      
+      // Load invoices
+      const { data: invoicesData, error: invoicesError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .order('created_at', { ascending: false });
+      
+      if (invoicesError) throw invoicesError;
 
-      if (invoicesRes.data) setInvoices(invoicesRes.data as Invoice[]);
-      if (clientsRes.data) setClients(clientsRes.data);
-      if (productsRes.data) setProducts(productsRes.data);
+      // Load invoice items for each invoice
+      let invoicesWithItems: Invoice[] = [];
+      if (invoicesData) {
+        invoicesWithItems = await Promise.all(invoicesData.map(async (invoice) => {
+          const { data: items, error: itemsError } = await supabase
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', invoice.id);
+          
+          if (itemsError) throw itemsError;
+
+          // Load client data
+          const { data: client, error: clientError } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('id', invoice.client_id)
+            .single();
+          
+          if (clientError && clientError.code !== 'PGRST116') throw clientError;
+
+          return {
+            ...invoice,
+            items: items || [],
+            client: client || undefined
+          };
+        }));
+      }
+
+      // Load clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('organization_id', organization.id);
+      
+      if (clientsError) throw clientsError;
+
+      // Load products
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('organization_id', organization.id);
+      
+      if (productsError) throw productsError;
+
+      setInvoices(invoicesWithItems);
+      setClients(clientsData || []);
+      setProducts(productsData || []);
     } catch (error) {
+      console.error('Error loading data:', error);
       showToast('Failed to load invoices', 'error');
     } finally {
       setLoading(false);
@@ -100,8 +135,8 @@ export function Invoices() {
     doc.text('INVOICE', 105, 20, { align: 'center' });
     
     doc.setFontSize(10);
-    doc.text(`Invoice #: ${invoice.number}`, 20, 40);
-    doc.text(`Date: ${new Date(invoice.created_at).toLocaleDateString()}`, 20, 45);
+    doc.text(`Invoice #: ${invoice.invoice_number}`, 20, 40);
+    doc.text(`Date: ${new Date(invoice.issue_date).toLocaleDateString()}`, 20, 45);
     doc.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, 20, 50);
     
     if (invoice.client) {
@@ -113,20 +148,20 @@ export function Invoices() {
     autoTable(doc, {
       startY: 60,
       head: [['Description', 'Quantity', 'Unit Price', 'Total']],
-      body: invoice.items.map(item => [
+      body: (invoice.items || []).map(item => [
         item.description,
-        item.quantity,
+        item.quantity.toString(),
         `$${item.unit_price.toLocaleString()}`,
         `$${item.total.toLocaleString()}`
       ]),
       foot: [['', '', 'Total', `$${invoice.total.toLocaleString()}`]],
     });
 
-    doc.save(`invoice-${invoice.number}.pdf`);
+    doc.save(`invoice-${invoice.invoice_number}.pdf`);
   };
 
   const filteredInvoices = invoices.filter(inv => 
-    inv.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     inv.client?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -204,13 +239,15 @@ export function Invoices() {
             ) : (
               filteredInvoices.map((invoice) => (
                 <TableRow key={invoice.id} className="group">
-                  <TableCell className="font-medium">{invoice.number}</TableCell>
+                  <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                   <TableCell>{invoice.client?.name || 'Unknown'}</TableCell>
-                  <TableCell>{new Date(invoice.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(invoice.issue_date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase tracking-widest ${
                       invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
                       invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                      invoice.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                      invoice.status === 'cancelled' ? 'bg-gray-100 text-gray-700' :
                       'bg-amber-100 text-amber-700'
                     }`}>
                       {invoice.status}
@@ -232,7 +269,7 @@ export function Invoices() {
                           setIsModalOpen(true);
                         }}
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit2 className="w-4 h-4" />
                       </Button>
                       <Button 
                         variant="ghost" 
@@ -288,7 +325,9 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
     { description: '', quantity: 1, unit_price: 0, total: 0 }
   ]);
 
-  const total = items.reduce((sum, item) => sum + item.total, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const taxTotal = 0; // TODO: Add tax calculation based on organization tax_rate
+  const total = subtotal + taxTotal;
 
   const addItem = () => {
     setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0 }]);
@@ -322,10 +361,11 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
 
     const formData = new FormData(e.target as HTMLFormElement);
     const client_id = formData.get('client_id') as string;
-    const number = formData.get('number') as string;
+    const invoice_number = formData.get('invoice_number') as string;
+    const issue_date = formData.get('issue_date') as string;
     const due_date = formData.get('due_date') as string;
 
-    if (!client_id || !number || items.length === 0) {
+    if (!client_id || !invoice_number || !issue_date || !due_date || items.length === 0) {
       showToast('Please fill in all required fields', 'error');
       return;
     }
@@ -344,11 +384,14 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
       const invoiceData = {
         organization_id: organization.id,
         client_id,
-        number,
+        invoice_number,
+        subtotal,
+        tax_total: taxTotal,
         total,
-        status: (formData.get('status') as any) || 'draft',
+        status: (formData.get('status') as string) || 'draft',
+        issue_date,
         due_date,
-        created_by: user.id
+        notes: (formData.get('notes') as string) || null
       };
 
       let currentInvoiceId = invoice?.id;
@@ -381,7 +424,6 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
       const { error: itemsError } = await supabase.from('invoice_items').insert(
         items.map(item => ({
           invoice_id: currentInvoiceId as string,
-          organization_id: organization.id,
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -394,6 +436,7 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
       showToast(`Invoice ${invoice ? 'updated' : 'created'} successfully`, 'success');
       onSuccess();
     } catch (error) {
+      console.error('Error:', error);
       showToast(`Failed to ${invoice ? 'update' : 'create'} invoice`, 'error');
     } finally {
       setIsSubmitting(false);
@@ -404,10 +447,10 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Client</label>
+          <label className="text-sm font-medium">Client *</label>
           <select 
             name="client_id" 
-            defaultValue={invoice?.client_id}
+            defaultValue={invoice?.client_id || ''}
             className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm"
             required
           >
@@ -418,16 +461,25 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
           </select>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Invoice Number</label>
+          <label className="text-sm font-medium">Invoice Number *</label>
           <Input 
-            name="number" 
-            defaultValue={invoice?.number || `INV-${Date.now().toString().slice(-6)}`} 
+            name="invoice_number" 
+            defaultValue={invoice?.invoice_number || `INV-${Date.now().toString().slice(-6)}`} 
             placeholder="INV-001" 
             required 
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Due Date</label>
+          <label className="text-sm font-medium">Issue Date *</label>
+          <Input 
+            name="issue_date" 
+            type="date" 
+            defaultValue={invoice?.issue_date?.split('T')[0] || new Date().toISOString().split('T')[0]} 
+            required 
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Due Date *</label>
           <Input 
             name="due_date" 
             type="date" 
@@ -445,8 +497,17 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
             <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
             <option value="cancelled">Cancelled</option>
           </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Notes</label>
+          <Input 
+            name="notes" 
+            defaultValue={invoice?.notes || ''} 
+            placeholder="Add any notes..." 
+          />
         </div>
       </div>
 
@@ -530,8 +591,14 @@ function InvoiceForm({ invoice, clients, products, onClose, onSuccess }: Invoice
       <div className="flex flex-col items-end gap-2 pt-6 border-t border-border mt-8">
         <div className="flex gap-8 text-lg italic">
           <span className="text-muted-foreground font-medium">Subtotal</span>
-          <span className="font-bold font-sans">${total.toLocaleString()}</span>
+          <span className="font-bold font-sans">${subtotal.toLocaleString()}</span>
         </div>
+        {taxTotal > 0 && (
+          <div className="flex gap-8 text-lg italic">
+            <span className="text-muted-foreground font-medium">Tax</span>
+            <span className="font-bold font-sans">${taxTotal.toLocaleString()}</span>
+          </div>
+        )}
         <div className="flex gap-8 text-2xl">
           <span className="text-foreground font-extrabold uppercase italic tracking-tighter">Total Due</span>
           <span className="font-sans font-black text-primary">${total.toLocaleString()}</span>
